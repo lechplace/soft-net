@@ -1,0 +1,31 @@
+/* soft-net docs — custom styles */
+
+:root {
+  --md-code-hl-number-color: #e06c75;
+  --md-code-hl-special-color: #c678dd;
+  --md-code-hl-function-color: #61afef;
+  --md-code-hl-constant-color: #d19a66;
+  --md-code-hl-keyword-color: #c678dd;
+  --md-code-hl-string-color: #98c379;
+  --md-code-hl-name-color: #e5c07b;
+  --md-code-hl-operator-color: #56b6c2;
+}
+
+/* API reference — parameter tables */
+.doc-contents table {
+  display: table;
+  width: 100%;
+}
+
+/* subtle banner for "auto-detected" callouts */
+.admonition.auto {
+  border-color: #7c4dff;
+}
+.admonition.auto > .admonition-title {
+  background-color: rgba(124, 77, 255, 0.12);
+}
+.admonition.auto > .admonition-title::before {
+  background-color: #7c4dff;
+  -webkit-mask-image: var(--md-admonition-icon--tip);
+  mask-image: var(--md-admonition-icon--tip);
+}
