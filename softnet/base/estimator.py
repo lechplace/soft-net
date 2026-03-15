@@ -78,6 +78,22 @@ class SoftEstimator(BaseEstimator):
     def score(self, X: np.ndarray, y: np.ndarray) -> float:
         raise NotImplementedError
 
+    def summary(self) -> None:
+        """Print soft-net config + Keras model.summary()."""
+        if self.model_ is None:
+            print("Model not fitted yet. Call fit() first.")
+            return
+        print("=" * 60)
+        print(f"  soft-net  |  {type(self).__name__}")
+        print("=" * 60)
+        print(f"  Task           : {self.task_info_}")
+        print(f"  Loss           : {self.config_.loss}")
+        print(f"  Output activ.  : {self.config_.output_activation}")
+        print(f"  Metrics        : {self.config_.metrics}")
+        print(f"  Rationale      : {self.config_.rationale}")
+        print("-" * 60)
+        self.model_.summary()
+
     def explain(self) -> str:
         """Return human-readable explanation of chosen configuration."""
         if self.config_ is None:
