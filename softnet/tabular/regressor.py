@@ -5,6 +5,7 @@ SoftRegressor — sklearn-compatible neural regressor with smart defaults.
 from __future__ import annotations
 
 import numpy as np
+from sklearn.base import RegressorMixin
 from sklearn.metrics import r2_score
 
 from softnet.base import SoftEstimator, build_mlp
@@ -14,7 +15,7 @@ from softnet.inference import ModelConfig
 _DEFAULT_LAYERS = [128, 64]
 
 
-class SoftRegressor(SoftEstimator):
+class SoftRegressor(RegressorMixin, SoftEstimator):
     """
     Neural network regressor that automatically configures itself based on y.
 

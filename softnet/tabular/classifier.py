@@ -1,19 +1,11 @@
 """
 SoftClassifier — sklearn-compatible neural classifier with smart defaults.
-
-Usage:
-    from softnet import SoftClassifier
-
-    clf = SoftClassifier(layers=[64, 32])
-    clf.fit(X_train, y_train)
-    clf.predict(X_test)
-    clf.predict_proba(X_test)
-    print(clf.explain())
 """
 
 from __future__ import annotations
 
 import numpy as np
+from sklearn.base import ClassifierMixin
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 
@@ -24,18 +16,15 @@ from softnet.inference import ModelConfig, TaskType
 _DEFAULT_LAYERS = [128, 64]
 
 
-class SoftClassifier(SoftEstimator):
+class SoftClassifier(ClassifierMixin, SoftEstimator):
     """
     Neural network classifier that automatically configures itself based on y.
 
     Parameters
     ----------
     layers : list[int], default [128, 64]
-        Number of units in each hidden layer.
     dropout : float, default 0.0
-        Dropout rate applied after each hidden layer.
     batch_norm : bool, default False
-        Whether to add BatchNormalization after each hidden layer.
     epochs : int, default 50
     batch_size : int, default 32
     validation_split : float, default 0.1
@@ -46,11 +35,8 @@ class SoftClassifier(SoftEstimator):
     Attributes
     ----------
     classes_ : ndarray
-        Unique class labels seen during fit.
     task_info_ : TaskInfo
-        Inferred task type (BINARY, MULTICLASS, MULTILABEL).
     config_ : ModelConfig
-        Fully resolved Keras configuration.
     history_ : keras.callbacks.History
     """
 
@@ -91,18 +77,12 @@ class SoftClassifier(SoftEstimator):
         self._check_is_fitted()
         X = self._validate_data(X, reset=False)
         raw = self.model_.predict(X, verbose=0)
-
         if self.task_info_.task == TaskType.BINARY:
-            # return (n, 2) shape consistent with sklearn convention
             return np.hstack([1 - raw, raw])
         return raw
 
     def score(self, X: np.ndarray, y: np.ndarray) -> float:
         return accuracy_score(y, self.predict(X))
-
-    # ------------------------------------------------------------------
-    # internal
-    # ------------------------------------------------------------------
 
     def _build_model(self, config: ModelConfig, input_dim: int):
         import keras
@@ -129,7 +109,6 @@ class SoftClassifier(SoftEstimator):
         elif self.task_info_.task == TaskType.MULTICLASS:
             encoded = np.argmax(raw, axis=1)
         else:
-            # multilabel — threshold at 0.5
             return (raw >= 0.5).astype(int)
 
         return self._label_encoder.inverse_transform(encoded)
