@@ -311,6 +311,72 @@ class SoftEstimator(BaseEstimator):
     # internal helpers
     # ------------------------------------------------------------------
 
+    @classmethod
+    def from_preset(cls, name: str, **kwargs) -> "SoftEstimator":
+        """
+        Utwórz estymator z predefiniowanej architektury MLP.
+
+        Wczytuje ``layers``, ``dropout`` i ``batch_norm`` z rejestru presetów.
+        Wszystkie pozostałe parametry (``epochs``, ``batch_size`` itp.)
+        można nadpisać przez ``**kwargs``.
+
+        Parameters
+        ----------
+        name : str
+            Nazwa presetu. Dostępne presety → ``list_presets()``.
+            Wbudowane: ``"tiny"``, ``"small"``, ``"medium"``, ``"large"``,
+            ``"deep"``, ``"wide"`` i inne.
+
+        **kwargs
+            Dowolne parametry ``__init__`` nadpisujące wartości z presetu.
+            Np. ``epochs=200``, ``batch_size=64``, ``verbose=1``.
+
+        Returns
+        -------
+        estimator : instance of the calling class
+            Nowa, niefitowana instancja.
+
+        Raises
+        ------
+        KeyError
+            Jeśli preset o podanej nazwie nie istnieje.
+
+        Examples
+        --------
+        >>> from softnet import SoftClassifier, SoftRegressor
+        >>> from softnet.presets import list_presets
+
+        >>> list_presets()   # podejrzyj dostępne presety
+
+        >>> # klasyfikator z presetem "medium"
+        >>> clf = SoftClassifier.from_preset("medium", epochs=100, verbose=1)
+        >>> clf.fit(X_train, y_train)
+
+        >>> # regresor z presetem "deep", własny batch_size
+        >>> reg = SoftRegressor.from_preset("deep", epochs=200, batch_size=64)
+        >>> reg.fit(X_train, y_train)
+
+        >>> # własny preset z pliku
+        >>> from softnet.presets import load_presets_from_toml
+        >>> load_presets_from_toml("~/my_presets.toml")
+        >>> clf = SoftClassifier.from_preset("fraud_net", epochs=50)
+
+        See Also
+        --------
+        softnet.presets.list_presets       : Wypisz dostępne presety.
+        softnet.presets.register_preset    : Zarejestruj własny preset.
+        softnet.presets.load_presets_from_toml : Wczytaj presety z TOML.
+        """
+        from softnet.presets import get_preset
+        preset = get_preset(name)
+        params = dict(
+            layers=preset.layers,
+            dropout=preset.dropout,
+            batch_norm=preset.batch_norm,
+        )
+        params.update(kwargs)
+        return cls(**params)
+
     def _build_model(self, config: ModelConfig, input_dim: int):
         raise NotImplementedError
 

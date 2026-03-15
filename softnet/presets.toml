@@ -1,0 +1,89 @@
+# soft-net — MLP preset architectures
+#
+# Format każdego presetu:
+#   [nazwa]
+#   layers      = [int, ...]   # liczba neuronów w kolejnych warstwach ukrytych
+#   dropout     = float        # dropout po każdej warstwie ukrytej (0.0 = brak)
+#   batch_norm  = bool         # BatchNormalization po każdej warstwie
+#   description = "..."        # opis dla list_presets()
+#
+# Możesz tu dodawać własne presety lub zmieniać istniejące.
+# Plik jest ładowany przy imporcie softnet.presets — zmiany są widoczne po restarcie.
+
+# ── 2 warstwy ────────────────────────────────────────────────────────────────
+
+[tiny]
+layers      = [64, 32]
+dropout     = 0.0
+batch_norm  = false
+description = "2 warstwy, brak regularyzacji. Dobry punkt startowy dla małych zbiorów."
+
+# ── 3 warstwy ────────────────────────────────────────────────────────────────
+
+[small]
+layers      = [128, 64, 32]
+dropout     = 0.1
+batch_norm  = false
+description = "3 warstwy, lekki dropout. Polecany dla prostych zadań (Iris, tabular < 1k)."
+
+[small_bn]
+layers      = [128, 64, 32]
+dropout     = 0.2
+batch_norm  = true
+description = "3 warstwy + BatchNorm. Szybsza zbieżność niż 'small'."
+
+# ── 4 warstwy ────────────────────────────────────────────────────────────────
+
+[medium]
+layers      = [256, 128, 64, 32]
+dropout     = 0.2
+batch_norm  = false
+description = "4 warstwy, umiarkowany dropout. Dobry kompromis ogólne zastosowania."
+
+[medium_bn]
+layers      = [256, 128, 64, 32]
+dropout     = 0.3
+batch_norm  = true
+description = "4 warstwy + BatchNorm + silniejszy dropout. Odporny na overfitting."
+
+# ── 5 warstwy ────────────────────────────────────────────────────────────────
+
+[large]
+layers      = [512, 256, 128, 64, 32]
+dropout     = 0.3
+batch_norm  = false
+description = "5 warstw, dobry dla średnich zbiorów (10k–100k próbek)."
+
+[large_bn]
+layers      = [512, 256, 128, 64, 32]
+dropout     = 0.3
+batch_norm  = true
+description = "5 warstw + BatchNorm. Zalecany gdy dane nie są znormalizowane."
+
+# ── 6 warstw ─────────────────────────────────────────────────────────────────
+
+[deep]
+layers      = [512, 256, 256, 128, 64, 32]
+dropout     = 0.3
+batch_norm  = true
+description = "6 warstw, silna regularyzacja. Dla złożonych zadań (fraud detection, >100k)."
+
+[deep_wide]
+layers      = [1024, 512, 256, 128, 64, 32]
+dropout     = 0.4
+batch_norm  = true
+description = "6 szerokich warstw. Maksymalna pojemność — wymaga dużo danych."
+
+# ── specjalne ─────────────────────────────────────────────────────────────────
+
+[wide]
+layers      = [1024, 512, 256]
+dropout     = 0.4
+batch_norm  = true
+description = "3 szerokie warstwy. Dobre gdy features są bardzo informatywne."
+
+[residual_like]
+layers      = [256, 256, 256, 256]
+dropout     = 0.2
+batch_norm  = true
+description = "4 równe warstwy, BatchNorm. Przypomina styl ResNet — stabilny trening."

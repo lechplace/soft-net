@@ -14,6 +14,13 @@ Quick start:
 from softnet.tabular import SoftClassifier, SoftRegressor
 from softnet.image import SoftImageClassifier, BackboneRegistry
 from softnet.inference import TaskInferrer, TaskType
+from softnet.presets import (
+    MLPPreset,
+    list_presets,
+    get_preset,
+    register_preset,
+    load_presets_from_toml,
+)
 
 __version__ = "0.1.0"
 
@@ -24,4 +31,10 @@ __all__ = [
     "BackboneRegistry",
     "TaskInferrer",
     "TaskType",
+    # presets
+    "MLPPreset",
+    "list_presets",
+    "get_preset",
+    "register_preset",
+    "load_presets_from_toml",
 ]
