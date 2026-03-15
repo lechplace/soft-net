@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 from sklearn.base import ClassifierMixin
+from sklearn.utils.validation import check_array
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 
@@ -75,7 +76,7 @@ class SoftClassifier(ClassifierMixin, SoftEstimator):
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         self._check_is_fitted()
-        X = self._validate_data(X, reset=False)
+        X = check_array(X)
         raw = self.model_.predict(X, verbose=0)
         if self.task_info_.task == TaskType.BINARY:
             return np.hstack([1 - raw, raw])

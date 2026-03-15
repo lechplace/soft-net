@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 from sklearn.base import BaseEstimator
+from sklearn.utils.validation import check_X_y, check_array
 
 from softnet.inference import TaskInferrer, ConfigResolver, ModelConfig, TaskInfo
 
@@ -55,7 +56,7 @@ class SoftEstimator(BaseEstimator):
     # ------------------------------------------------------------------
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "SoftEstimator":
-        X, y = self._validate_data(X, y)
+        X, y = check_X_y(X, y, allow_nd=False)
 
         self.task_info_ = TaskInferrer().infer(y)
         self.config_ = ConfigResolver().resolve(self.task_info_)
@@ -71,7 +72,7 @@ class SoftEstimator(BaseEstimator):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         self._check_is_fitted()
-        X = self._validate_data(X, reset=False)
+        X = check_array(X)
         return self._decode_predictions(self.model_.predict(X, verbose=0))
 
     def score(self, X: np.ndarray, y: np.ndarray) -> float:
