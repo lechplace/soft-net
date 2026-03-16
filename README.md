@@ -271,6 +271,157 @@ description = "Mój zmodyfikowany medium."
 
 ---
 
+## Workflow presets — gotowe cykle ML
+
+`SoftWorkflow` łączy kroki ML (split, scale, fit, validate, save, …) w jeden obiekt
+z automatycznym zarządzaniem danymi między krokami.
+
+### Dostępne presety
+
+```python
+from softnet.workflows import list_workflows
+
+list_workflows()
+```
+
+```
+Preset             Kroki
+----------------------------------------------------------------------
+basic              split → fit → validate
+scaled             split → scale → fit → validate
+scaled_save        split → scale → fit → validate → save
+grid_search        split → scale → grid_search → validate
+randomized_search  split → scale → randomized_search → validate
+voting             split → scale → voting → validate
+full               split → scale → fit → validate → save
+full_search        split → scale → grid_search → validate → save
+```
+
+### Użycie podstawowe
+
+```python
+from softnet.workflows import SoftWorkflow
+from softnet import SoftClassifier
+
+wf = SoftWorkflow.from_preset("scaled")
+result = wf.run(X, y, estimator=SoftClassifier.from_preset("medium"))
+
+print(result.score)    # 0.9733  (accuracy lub R²)
+print(result.report)   # classification_report / R²/MAE/RMSE
+```
+
+### Grid search
+
+```python
+wf = SoftWorkflow.from_preset("grid_search")
+result = wf.run(X, y, estimator=SoftClassifier.from_preset("medium"))
+
+print(result.best_params)   # {"epochs": 100, "dropout": 0.2}
+print(result.score)
+```
+
+Własna siatka parametrów:
+
+```python
+from softnet.workflows import SoftWorkflow, GridSearchStep
+
+wf = SoftWorkflow.from_preset(
+    "grid_search",
+    step_overrides={
+        "grid_search": GridSearchStep(
+            param_grid={"epochs": [50, 100, 200], "dropout": [0.1, 0.3]},
+            cv=3,
+        )
+    },
+)
+result = wf.run(X, y, estimator=SoftClassifier.from_preset("medium"))
+```
+
+### Voting ensemble
+
+Domyślnie tworzy ansambl trzech modeli: `small`, `medium`, `large`.
+
+```python
+wf = SoftWorkflow.from_preset("voting")
+result = wf.run(X, y)   # estimator nie jest potrzebny
+
+print(result.score)
+```
+
+Własne modele głosujące:
+
+```python
+from softnet.workflows import SoftWorkflow, VotingStep
+from softnet import SoftClassifier
+
+wf = SoftWorkflow.from_preset(
+    "voting",
+    step_overrides={
+        "voting": VotingStep(
+            estimators=[
+                ("net_a", SoftClassifier.from_preset("medium", epochs=100)),
+                ("net_b", SoftClassifier.from_preset("large",  epochs=100)),
+            ],
+            voting="soft",
+        )
+    },
+)
+result = wf.run(X, y)
+```
+
+### Zapis modelu
+
+```python
+from softnet.workflows import SoftWorkflow, SaveStep
+
+wf = SoftWorkflow.from_preset(
+    "scaled_save",
+    step_overrides={"save": SaveStep(path="models/moj_model", format="keras")},
+)
+result = wf.run(X, y, estimator=SoftClassifier.from_preset("large"))
+print(result.saved_path)   # models/moj_model.keras
+```
+
+### Własny workflow w TOML
+
+Utwórz plik `my_workflows.toml`:
+
+```toml
+[fraud_full]
+description = "Pełny cykl do fraud detection"
+steps = ["split", "scale", "grid_search", "validate", "save"]
+
+[step_defaults.split]
+test_size = 0.15
+
+[step_defaults.save]
+path = "models/fraud_model"
+```
+
+Wczytaj:
+
+```python
+from softnet.workflows import load_workflows_from_toml, SoftWorkflow
+
+load_workflows_from_toml("my_workflows.toml")
+wf = SoftWorkflow.from_preset("fraud_full")
+result = wf.run(X, y, estimator=SoftClassifier.from_preset("deep"))
+```
+
+### WorkflowResult — co zwraca `run()`
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `result.score` | `float` | Główna metryka (accuracy lub R²) |
+| `result.report` | `str` | Pełny raport tekstowy |
+| `result.model` | estimator | Wytrenowany model |
+| `result.scaler` | scaler / None | Wytrenowany scaler |
+| `result.best_params` | dict / None | Najlepsze params (grid/random search) |
+| `result.saved_path` | str / None | Ścieżka zapisanego modelu |
+| `result.ctx` | dict | Pełny kontekst — surowe dane, historia treningu |
+
+---
+
 ## Dostępne modele bazowe (BackboneRegistry)
 
 Wszystkie modele pretrenowane na ImageNet, ładowane leniwie (brak narzutu przy imporcie).
