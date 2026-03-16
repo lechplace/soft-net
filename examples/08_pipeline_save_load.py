@@ -49,7 +49,7 @@ except ImportError:
     raise ImportError("Wymagana biblioteka: pip install kagglehub")
 
 path = kagglehub.dataset_download(DATASET_SLUG)
-CSV_PATH = next(Path(path).glob("*.csv"))
+CSV_PATH = Path(path) / "creditcard.csv"
 print(f"      Dane: {CSV_PATH}")
 
 df = pd.read_csv(CSV_PATH)
