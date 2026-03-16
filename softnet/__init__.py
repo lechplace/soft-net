@@ -14,6 +14,7 @@ Quick start:
 from softnet.tabular import SoftClassifier, SoftRegressor
 from softnet.image import SoftImageClassifier, BackboneRegistry
 from softnet.inference import TaskInferrer, TaskType
+from softnet.pipeline import SoftPipeline
 from softnet.presets import (
     MLPPreset,
     list_presets,
@@ -46,6 +47,8 @@ __all__ = [
     "get_preset",
     "register_preset",
     "load_presets_from_toml",
+    # production pipeline
+    "SoftPipeline",
     # workflow presets
     "SoftWorkflow",
     "WorkflowResult",

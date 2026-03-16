@@ -61,6 +61,97 @@ class WorkflowResult:
             parts.append(f"saved='{self.saved_path}'")
         return f"WorkflowResult({', '.join(parts)})"
 
+    def to_pipeline(self) -> "SoftPipeline":
+        """
+        Konwertuj wynik workflow do produkcyjnego pipeline'u inferencji.
+
+        Pipeline zawiera wszystkie dopasowane transformacje (scaler, PCA,
+        feature selector, leaf encoding) oraz wytrenowany model. Można go
+        zapisać na dysk i załadować na serwerze produkcyjnym — bez dostępu
+        do danych treningowych i bez ``y``.
+
+        Transformacje są wyekstrahowane z ``ctx`` w kolejności zastosowania
+        podczas treningu.
+
+        Returns
+        -------
+        SoftPipeline
+            Gotowy do zapisu i inferencji pipeline produkcyjny.
+
+        Examples
+        --------
+        Trening i eksport:
+
+        >>> result = wf.run(X, y, estimator=clf)
+        >>> pipe = result.to_pipeline()
+        >>> pipe.save("models/fraud_v1")           # katalog
+        >>> pipe.save("models/fraud_v1", as_zip=True)  # .softpipe
+
+        Na produkcji (brak y, brak trenowania):
+
+        >>> from softnet.pipeline import SoftPipeline
+        >>> pipe = SoftPipeline.load("models/fraud_v1")
+        >>> predictions   = pipe.predict(X_new)
+        >>> probabilities = pipe.predict_proba(X_new)
+
+        See Also
+        --------
+        SoftPipeline : Klasa produkcyjnego pipeline'u.
+        SoftPipeline.load : Ładowanie z dysku.
+        """
+        from softnet.pipeline import SoftPipeline, _Transform
+
+        ctx = self.ctx
+        transforms = []
+
+        # Rekonstruuj łańcuch transformacji w kolejności treningowej
+        # (canonical order: scaler → feature_selector → pca → leaf_encoding)
+        if ctx.get("scaler") is not None:
+            transforms.append(_Transform(name="scaler", obj=ctx["scaler"]))
+
+        if ctx.get("feature_selector") is not None:
+            transforms.append(_Transform(name="feature_selector", obj=ctx["feature_selector"]))
+
+        if ctx.get("pca") is not None:
+            transforms.append(_Transform(name="pca", obj=ctx["pca"]))
+
+        if ctx.get("leaf_encoder") is not None:
+            transforms.append(_Transform(
+                name="leaf_encoding",
+                obj=ctx["leaf_encoder"],
+                ohe=ctx["leaf_ohe"],
+                orig_idx=ctx.get("leaf_selected_original"),
+            ))
+
+        estimator = ctx.get("fitted_estimator") or self.model
+        if estimator is None:
+            raise ValueError(
+                "Brak wytrenowanego modelu w ctx. "
+                "Upewnij się, że workflow zawiera krok 'fit', 'grid_search' lub 'voting'."
+            )
+
+        # Zbierz metryki z treningu do metadanych
+        validation = ctx.get("validation", {})
+        metadata: dict = {
+            "workflow_transforms": [t.name for t in transforms],
+            "estimator_type": type(estimator).__name__,
+        }
+        for key in ("score", "accuracy", "f1", "roc_auc", "r2", "mae", "rmse"):
+            if key in validation:
+                metadata[key] = validation[key]
+
+        return SoftPipeline(
+            transforms=transforms,
+            estimator=estimator,
+            metadata=metadata,
+        )
+
+
+# Lazy import żeby uniknąć circular import
+def _get_soft_pipeline():
+    from softnet.pipeline import SoftPipeline
+    return SoftPipeline
+
 
 # ── SoftWorkflow ──────────────────────────────────────────────────────────────
 
