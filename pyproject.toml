@@ -10,6 +10,7 @@ authors = [{ name = "soft-net contributors" }]
 dependencies = [
     "numpy>=1.24",
     "scikit-learn>=1.3",
+    "joblib>=1.3",
     "keras>=3.0",
     "tensorflow>=2.15",
 ]
