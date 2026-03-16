@@ -33,20 +33,56 @@ print(clf.explain())         # wyjaśnia dlaczego wybrał te wartości
 
 ## Instalacja
 
-Wymagany Python 3.10+. Zalecany menedżer pakietów: [uv](https://github.com/astral-sh/uv).
+Wymagany Python 3.10+.
+
+### Opcja A — bezpośrednio z GitHub (zalecana dla użytkowników)
+
+Nie trzeba klonować repozytorium. Działa z `pip` i `uv`:
 
 ```bash
-# sklonuj repozytorium
-git clone <repo-url>
+# pip
+pip install "git+https://github.com/lechplace/soft-net.git"
+
+# uv
+uv pip install "git+https://github.com/lechplace/soft-net.git"
+
+# z obsługą klasyfikacji obrazów
+uv pip install "softnet[image] @ git+https://github.com/lechplace/soft-net.git"
+```
+
+### Opcja B — nowe środowisko od zera (uv)
+
+```bash
+mkdir moj-projekt && cd moj-projekt
+
+uv venv
+source .venv/bin/activate          # Linux/macOS
+# .venv\Scripts\activate           # Windows
+
+uv pip install "git+https://github.com/lechplace/soft-net.git"
+```
+
+### Opcja C — dla rozwijających framework (edytowalna)
+
+Zmiany w źródłach są widoczne natychmiast bez reinstalacji:
+
+```bash
+git clone https://github.com/lechplace/soft-net.git
 cd soft-net
 
-# utwórz środowisko i zainstaluj zależności
-uv venv
-source .venv/bin/activate
+uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
+```
 
-# dla klasyfikacji obrazów (opcjonalne)
-uv pip install -e ".[image]"
+### Weryfikacja instalacji
+
+```python
+import softnet
+print(softnet.__version__)          # 0.1.0
+
+from softnet import SoftClassifier
+from softnet.presets import list_presets
+list_presets()
 ```
 
 ### Zależności
