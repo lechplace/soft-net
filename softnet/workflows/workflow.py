@@ -104,24 +104,33 @@ class WorkflowResult:
         ctx = self.ctx
         transforms = []
 
-        # Rekonstruuj łańcuch transformacji w kolejności treningowej
-        # (canonical order: scaler → feature_selector → pca → leaf_encoding)
-        if ctx.get("scaler") is not None:
-            transforms.append(_Transform(name="scaler", obj=ctx["scaler"]))
-
-        if ctx.get("feature_selector") is not None:
-            transforms.append(_Transform(name="feature_selector", obj=ctx["feature_selector"]))
-
-        if ctx.get("pca") is not None:
-            transforms.append(_Transform(name="pca", obj=ctx["pca"]))
-
-        if ctx.get("leaf_encoder") is not None:
-            transforms.append(_Transform(
-                name="leaf_encoding",
-                obj=ctx["leaf_encoder"],
-                ohe=ctx["leaf_ohe"],
-                orig_idx=ctx.get("leaf_selected_original"),
-            ))
+        # Dynamiczny łańcuch — kolejność zarejestrowana przez kroki podczas run()
+        chain = ctx.get("_transform_chain", [])
+        if chain:
+            for entry in chain:
+                transforms.append(_Transform(
+                    name=entry["name"],
+                    obj=entry["obj"],
+                    ohe=entry.get("ohe"),
+                    orig_idx=entry.get("orig_idx"),
+                    extra={k: v for k, v in entry.items()
+                           if k not in ("name", "obj", "ohe", "orig_idx")},
+                ))
+        else:
+            # Fallback dla wstecznej kompatybilności (stare workflow bez _transform_chain)
+            if ctx.get("scaler") is not None:
+                transforms.append(_Transform(name="scaler", obj=ctx["scaler"]))
+            if ctx.get("feature_selector") is not None:
+                transforms.append(_Transform(name="feature_selector", obj=ctx["feature_selector"]))
+            if ctx.get("pca") is not None:
+                transforms.append(_Transform(name="pca", obj=ctx["pca"]))
+            if ctx.get("leaf_encoder") is not None:
+                transforms.append(_Transform(
+                    name="leaf_encoding",
+                    obj=ctx["leaf_encoder"],
+                    ohe=ctx["leaf_ohe"],
+                    orig_idx=ctx.get("leaf_selected_original"),
+                ))
 
         estimator = ctx.get("fitted_estimator") or self.model
         if estimator is None:

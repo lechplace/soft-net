@@ -46,7 +46,7 @@ from typing import Any
 import numpy as np
 
 # Wersja formatu zapisu (do weryfikacji przy ładowaniu)
-_FORMAT_VERSION = "1"
+_FORMAT_VERSION = "2"
 
 
 # ── Reprezentacja jednej transformacji ────────────────────────────────────────
@@ -56,9 +56,74 @@ class _Transform:
     """Pojedyncza transformacja w łańcuchu inferencji."""
     name: str          # np. "scaler", "pca", "feature_selector", "leaf_encoding"
     obj: Any           # główny obiekt sklearn (scaler / pca / selector / RF)
-    # pola specyficzne dla leaf_encoding
+    # pola specyficzne dla leaf_encoding (zachowane dla wstecznej kompatybilności)
     ohe: Any = None                       # OneHotEncoder
     orig_idx: list[int] | None = None     # indeksy oryginalnych cech do dołączenia
+    # dowolne dodatkowe obiekty/dane dla niestandardowych kroków
+    extra: dict = field(default_factory=dict)
+
+
+# ── Rejestr handlerów transformacji ──────────────────────────────────────────
+
+def _apply_scaler(t: _Transform, X: np.ndarray) -> np.ndarray:
+    return t.obj.transform(X)
+
+def _apply_pca(t: _Transform, X: np.ndarray) -> np.ndarray:
+    return t.obj.transform(X)
+
+def _apply_feature_selector(t: _Transform, X: np.ndarray) -> np.ndarray:
+    return t.obj.transform(X)
+
+def _apply_leaf_encoding(t: _Transform, X: np.ndarray) -> np.ndarray:
+    ohe      = t.ohe or t.extra.get("ohe")
+    orig_idx = t.orig_idx if t.orig_idx is not None else t.extra.get("orig_idx")
+    leaves   = t.obj.apply(X)
+    embed    = ohe.transform(leaves)
+    if orig_idx is not None:
+        return np.hstack([embed, X[:, orig_idx]])
+    return embed
+
+# Globalny rejestr: name → fn(transform, X) → X
+TRANSFORM_HANDLERS: dict[str, Any] = {
+    "scaler":           _apply_scaler,
+    "pca":              _apply_pca,
+    "feature_selector": _apply_feature_selector,
+    "leaf_encoding":    _apply_leaf_encoding,
+}
+
+
+def register_transform_handler(name: str, fn) -> None:
+    """
+    Zarejestruj handler dla niestandardowego kroku transformacji.
+
+    Pozwala rozszerzać pipeline o własne typy transformacji bez modyfikowania
+    kodu soft-net. Handler musi przyjmować ``(_Transform, np.ndarray)``
+    i zwracać ``np.ndarray``.
+
+    Parameters
+    ----------
+    name : str
+        Nazwa transformacji (musi być zgodna z ``_Transform.name``).
+    fn : callable
+        Funkcja ``(transform: _Transform, X: np.ndarray) -> np.ndarray``.
+
+    Examples
+    --------
+    >>> from softnet.pipeline import register_transform_handler, _Transform
+    >>> import numpy as np
+    >>>
+    >>> def _apply_my_step(t: _Transform, X: np.ndarray) -> np.ndarray:
+    ...     num_transformer = t.extra["num_transformer"]
+    ...     cat_encoder     = t.extra["cat_encoder"]
+    ...     num_idx         = t.extra["num_idx"]
+    ...     cat_idx         = t.extra["cat_idx"]
+    ...     X_num = num_transformer.transform(X[:, num_idx])
+    ...     X_cat = cat_encoder.transform(X[:, cat_idx])
+    ...     return np.hstack([X_num, X_cat])
+    >>>
+    >>> register_transform_handler("column_transform", _apply_my_step)
+    """
+    TRANSFORM_HANDLERS[name] = fn
 
 
 # ── SoftPipeline ──────────────────────────────────────────────────────────────
@@ -120,25 +185,14 @@ class SoftPipeline:
     def _transform(self, X: np.ndarray) -> np.ndarray:
         """Przeprowadź X przez wszystkie transformacje (bez modelu)."""
         for t in self.transforms:
-            if t.name == "scaler":
-                X = t.obj.transform(X)
-
-            elif t.name == "feature_selector":
-                X = t.obj.transform(X)
-
-            elif t.name == "pca":
-                X = t.obj.transform(X)
-
-            elif t.name == "leaf_encoding":
-                X_pre = X  # przed leaf encoding (po wcześniejszych transformacjach)
-                leaves = t.obj.apply(X_pre)           # (n, n_trees) leaf IDs
-                embed  = t.ohe.transform(leaves)      # (n, sum_leaves) one-hot
-
-                if t.orig_idx is not None:
-                    X = np.hstack([embed, X_pre[:, t.orig_idx]])
-                else:
-                    X = embed
-
+            handler = TRANSFORM_HANDLERS.get(t.name)
+            if handler is None:
+                raise ValueError(
+                    f"Nieznany typ transformacji: {t.name!r}. "
+                    f"Zarejestruj handler przez: "
+                    f"softnet.pipeline.register_transform_handler('{t.name}', fn)"
+                )
+            X = handler(t, X)
         return X
 
     def predict(self, X) -> np.ndarray:
@@ -296,6 +350,7 @@ class SoftPipeline:
         meta["transforms"] = []
 
         # 2. transformacje
+        _PRIMITIVES = (str, int, float, bool, type(None), list, dict)
         for i, t in enumerate(self.transforms):
             t_meta: dict[str, Any] = {"name": t.name, "index": i}
 
@@ -305,6 +360,19 @@ class SoftPipeline:
                 t_meta["orig_idx"] = t.orig_idx
             else:
                 joblib.dump(t.obj, directory / f"transform_{i}.joblib")
+
+            # extra — obiekty sklearn jako joblib, prymitywy w JSON
+            if t.extra:
+                extra_keys_obj = []
+                extra_primitives = {}
+                for key, val in t.extra.items():
+                    if isinstance(val, _PRIMITIVES):
+                        extra_primitives[key] = val
+                    else:
+                        joblib.dump(val, directory / f"transform_{i}_extra_{key}.joblib")
+                        extra_keys_obj.append(key)
+                t_meta["extra_obj_keys"] = extra_keys_obj
+                t_meta["extra_primitives"] = extra_primitives
 
             meta["transforms"].append(t_meta)
 
@@ -388,7 +456,14 @@ class SoftPipeline:
                 transforms.append(_Transform(name=name, obj=rf, ohe=ohe, orig_idx=orig_idx))
             else:
                 obj = joblib.load(directory / f"transform_{i}.joblib")
-                transforms.append(_Transform(name=name, obj=obj))
+
+                # extra — odtwórz obiekty i prymitywy
+                extra: dict = {}
+                for key in t_meta.get("extra_obj_keys", []):
+                    extra[key] = joblib.load(directory / f"transform_{i}_extra_{key}.joblib")
+                extra.update(t_meta.get("extra_primitives", {}))
+
+                transforms.append(_Transform(name=name, obj=obj, extra=extra))
 
         # Model
         estimator = joblib.load(directory / "estimator.joblib")

@@ -106,6 +106,7 @@ class ScaleStep:
         ctx["X_train"] = scaler.fit_transform(ctx["X_train"])
         ctx["X_test"]  = scaler.transform(ctx["X_test"])
         ctx["scaler"]  = scaler
+        ctx.setdefault("_transform_chain", []).append({"name": "scaler", "obj": scaler})
         return ctx
 
 
@@ -568,6 +569,7 @@ class PCAStep:
         ctx["pca"]     = pca
         ctx["pca_n_components"]       = pca.n_components_
         ctx["pca_explained_variance"] = float(pca.explained_variance_ratio_.sum())
+        ctx.setdefault("_transform_chain", []).append({"name": "pca", "obj": pca})
 
         print(
             f"[soft-net] PCA: {ctx['X_train'].shape[1]} → {pca.n_components_} komponentów  "
@@ -735,6 +737,7 @@ class FeatureSelectionStep:
         ctx["selected_features"]   = selected
         ctx["n_features_original"] = n_original
         ctx["n_features_selected"] = X_train_new.shape[1]
+        ctx.setdefault("_transform_chain", []).append({"name": "feature_selector", "obj": selector})
 
         est_name = type(selector.estimator_).__name__
         print(
@@ -933,6 +936,9 @@ class LeafEncodingStep:
         ctx["leaf_selected_original"]    = orig_idx
         ctx["n_leaf_features"]           = embed_train.shape[1]
         ctx["n_total_features"]          = X_train_new.shape[1]
+        ctx.setdefault("_transform_chain", []).append({
+            "name": "leaf_encoding", "obj": rf, "ohe": ohe, "orig_idx": orig_idx,
+        })
 
         orig_info = (
             f" + {len(orig_idx)} oryginalnych cech" if orig_idx is not None else ""
