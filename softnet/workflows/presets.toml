@@ -21,6 +21,20 @@ steps       = ["split", "scale", "fit", "validate"]
 description = "Z zapisem modelu: split → scale → fit → validate → save"
 steps       = ["split", "scale", "fit", "validate", "save"]
 
+# ── z PCA ────────────────────────────────────────────────────────────────────
+
+[scaled_pca]
+description = "Z redukcją wymiarowości: split → scale → pca → fit → validate"
+steps       = ["split", "scale", "pca", "fit", "validate"]
+
+[scaled_pca_save]
+description = "Z PCA i zapisem: split → scale → pca → fit → validate → save"
+steps       = ["split", "scale", "pca", "fit", "validate", "save"]
+
+[pca_search]
+description = "PCA + grid search: split → scale → pca → grid_search → validate"
+steps       = ["split", "scale", "pca", "grid_search", "validate"]
+
 # ── przeszukiwanie hiperparametrów ────────────────────────────────────────────
 
 [grid_search]
@@ -56,6 +70,11 @@ random_state = 42
 
 [step_defaults.scale]
 method = "standard"   # "standard" | "minmax" | "robust"
+
+[step_defaults.pca]
+n_components = 0.95   # zachowaj 95% wariancji; int = dokładna liczba, float = % wariancji
+whiten       = false
+random_state = 42
 
 [step_defaults.validate]
 # metryki dobierane automatycznie na podstawie typu zadania

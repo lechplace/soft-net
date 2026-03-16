@@ -28,6 +28,7 @@ from softnet.workflows.registry import (
 from softnet.workflows.steps import (
     SplitStep,
     ScaleStep,
+    PCAStep,
     FitStep,
     ValidateStep,
     SaveStep,
@@ -49,6 +50,7 @@ __all__ = [
     # kroki
     "SplitStep",
     "ScaleStep",
+    "PCAStep",
     "FitStep",
     "ValidateStep",
     "SaveStep",

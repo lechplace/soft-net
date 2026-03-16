@@ -465,11 +465,122 @@ class VotingStep:
         return ctx
 
 
+# ── PCAStep ───────────────────────────────────────────────────────────────────
+
+class PCAStep:
+    """
+    Redukcja wymiarowości przez PCA (Principal Component Analysis).
+
+    Musi być użyty **po** ``SplitStep`` — PCA jest fitowany wyłącznie
+    na danych treningowych, a następnie transformuje zarówno train jak i test.
+    Dzięki temu nie dochodzi do data leakage.
+
+    Parameters
+    ----------
+    n_components : int, float or "mle", optional
+        Liczba komponentów głównych:
+
+        - ``int``   — dokładna liczba składowych, np. ``50``
+        - ``float`` — ułamek wyjaśnianej wariancji, np. ``0.95`` (95%)
+        - ``"mle"`` — automatyczny dobór przez MLE (tylko dla n_samples > n_features)
+        - ``None``  — wszystkie komponenty (brak redukcji, tylko rotacja)
+
+        Domyślnie ``0.95`` — zachowaj 95% wariancji.
+    whiten : bool, default False
+        Czy wybielić komponenty (normalizacja wariancji każdego PC do 1).
+        Przydatne przed sieciami neuronowymi gdy cechy mają różne skale.
+    random_state : int, default 42
+        Seed dla algorytmu randomized SVD.
+
+    Attributes set in ctx
+    ---------------------
+    ctx["pca"] : sklearn.decomposition.PCA
+        Fitowany obiekt PCA. Dostępny po wykonaniu kroku przez
+        ``result.ctx["pca"]``.
+    ctx["pca_explained_variance"] : float
+        Łączny odsetek wyjaśnionej wariancji (suma ``explained_variance_ratio_``).
+    ctx["pca_n_components"] : int
+        Faktyczna liczba użytych komponentów.
+
+    Notes
+    -----
+    Kolejność kroków z PCA:
+
+    ``split → scale → pca → fit → validate``
+
+    PCA po skalowaniu daje lepsze wyniki — StandardScaler zapewnia
+    równe wagi cech przed obliczaniem wariancji.
+
+    Examples
+    --------
+    Zachowaj 95% wariancji (domyślne):
+
+    >>> step = PCAStep()
+
+    Dokładna liczba komponentów:
+
+    >>> step = PCAStep(n_components=20)
+
+    W workflow:
+
+    >>> from softnet.workflows import SoftWorkflow, PCAStep
+    >>> wf = SoftWorkflow.from_preset(
+    ...     "scaled",
+    ...     step_overrides={"pca": PCAStep(n_components=0.99)},
+    ... )
+
+    Lub przez preset ``scaled_pca``:
+
+    >>> wf = SoftWorkflow.from_preset("scaled_pca")
+    >>> result = wf.run(X, y, estimator=SoftClassifier.from_preset("medium"))
+    >>> print(result.ctx["pca_n_components"])   # ile składowych zostało użytych
+    >>> print(result.ctx["pca_explained_variance"])  # ile % wariancji zachowane
+    """
+
+    def __init__(
+        self,
+        n_components: int | float | str | None = 0.95,
+        whiten: bool = False,
+        random_state: int = 42,
+    ):
+        self.n_components = n_components
+        self.whiten = whiten
+        self.random_state = random_state
+
+    def run(self, ctx: Context) -> Context:
+        from sklearn.decomposition import PCA
+
+        if "X_train" not in ctx:
+            raise ValueError(
+                "PCAStep wymaga wcześniejszego SplitStep. "
+                "Upewnij się, że 'split' jest przed 'pca' w sekwencji kroków."
+            )
+
+        pca = PCA(
+            n_components=self.n_components,
+            whiten=self.whiten,
+            random_state=self.random_state,
+        )
+
+        ctx["X_train"] = pca.fit_transform(ctx["X_train"])
+        ctx["X_test"]  = pca.transform(ctx["X_test"])
+        ctx["pca"]     = pca
+        ctx["pca_n_components"]       = pca.n_components_
+        ctx["pca_explained_variance"] = float(pca.explained_variance_ratio_.sum())
+
+        print(
+            f"[soft-net] PCA: {ctx['X_train'].shape[1]} → {pca.n_components_} komponentów  "
+            f"({ctx['pca_explained_variance'] * 100:.1f}% wariancji zachowane)"
+        )
+        return ctx
+
+
 # ── rejestr kroków ────────────────────────────────────────────────────────────
 
 STEP_REGISTRY: dict[str, type] = {
     "split":             SplitStep,
     "scale":             ScaleStep,
+    "pca":               PCAStep,
     "fit":               FitStep,
     "validate":          ValidateStep,
     "save":              SaveStep,
