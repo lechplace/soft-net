@@ -43,10 +43,7 @@ print("=" * 60)
 
 print(f"\n[1/5] Dataset: Credit Card Fraud ({DATASET_SLUG})")
 
-try:
-    import kagglehub
-except ImportError:
-    raise ImportError("Wymagana biblioteka: pip install kagglehub")
+import kagglehub
 
 path = kagglehub.dataset_download(DATASET_SLUG)
 CSV_PATH = Path(path) / "creditcard.csv"
