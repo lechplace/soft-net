@@ -146,3 +146,24 @@ random_state = 42
 
 [step_defaults.voting]
 voting = "soft"       # "soft" | "hard"
+
+# ── imbalanced / fraud detection ──────────────────────────────────────────────
+# Źródła: keras.io/examples/structured_data/imbalanced_classification,
+#         tensorflow.org/tutorials/structured_data/imbalanced_data,
+#         MDPI Electronics 12(12):2674, Frontiers AI 2025/1643292
+#
+# Kluczowe wnioski: RobustScaler > StandardScaler dla outlierów kwotowych,
+# leaf encoding zwiększa separowalność minority class,
+# stratify=true w split jest krytyczne dla zachowania proporcji klas.
+
+[imb_baseline_robust]
+description = "Baseline dla imbalanced: RobustScaler (odporny na outliery kwotowe) + fit + validate. Używać z class_weight w estimatorze."
+steps       = ["split", "scale", "fit", "validate"]
+
+[imb_rf_select_robust]
+description = "RobustScaler + selekcja cech przez RandomForest (threshold=mean). Redukuje szum dla minority class."
+steps       = ["split", "scale", "feature_selection", "fit", "validate"]
+
+[imb_leaf_robust]
+description = "RobustScaler + leaf encoding (RF tree embeddings). Tworzy dodatkowe cechy binaryzowane przez drzewa — skuteczne dla fraud gdzie minority ma unikalne wzorce."
+steps       = ["split", "scale", "leaf_encoding", "fit", "validate"]

@@ -87,3 +87,50 @@ layers      = [256, 256, 256, 256]
 dropout     = 0.2
 batch_norm  = true
 description = "4 równe warstwy, BatchNorm. Przypomina styl ResNet — stabilny trening."
+
+# ── imbalanced / fraud detection ──────────────────────────────────────────────
+# Źródła: keras.io/examples/structured_data/imbalanced_classification,
+#         tensorflow.org/tutorials/structured_data/imbalanced_data,
+#         MDPI Electronics 12(12):2674, Frontiers AI 2025/1643292
+
+[imb_plateau_deep]
+layers      = [256, 256, 256]
+dropout     = 0.3
+batch_norm  = false
+description = "Canonical Keras/fchollet fraud pattern: 3x256 z Dropout 0.3. Plateau shape stabilizuje gradient dla danych niezbalansowanych."
+
+[imb_plateau_bn]
+layers      = [256, 256, 256, 128]
+dropout     = 0.3
+batch_norm  = true
+description = "Plateau + BatchNorm + końcowe zwężenie. BN pomaga przy nienormalizowanych cechach transakcyjnych (Amount, Time)."
+
+[imb_funnel_heavy]
+layers      = [512, 256, 128, 64]
+dropout     = 0.4
+batch_norm  = true
+description = "Zwężający funnel z mocnym Dropout 0.4. Dla bardzo silnej nierównowagi klas (>1:100), np. creditcard dataset (0.17% fraud)."
+
+[imb_wide_dropout]
+layers      = [512, 512, 256, 128]
+dropout     = 0.35
+batch_norm  = true
+description = "Szeroka sieć plateau+zwężenie, Dropout 0.35. Dla dataset-ów z dużą liczbą cech PCA (V1-V28 w creditcard)."
+
+[imb_deep_residual]
+layers      = [256, 256, 256, 256, 128]
+dropout     = 0.3
+batch_norm  = true
+description = "Głęboka sieć ResNet-style z końcowym zwężeniem. Stabilny gradient. Gdy class_weight lub SMOTE nie wystarczają."
+
+[imb_lightweight]
+layers      = [128, 128, 64]
+dropout     = 0.3
+batch_norm  = true
+description = "Lekki model dla małych zbiorów niezbalansowanych (<50k próbek). Szybki przy oversamplingu SMOTE."
+
+[imb_aggressive_reg]
+layers      = [512, 256, 256, 128, 64, 32]
+dropout     = 0.45
+batch_norm  = true
+description = "Maksymalna regularyzacja dla ekstremalnej nierównowagi (>1:500). Dropout 0.45 + BN + 6 warstw. Używać z class_weight lub focal loss."
