@@ -191,6 +191,86 @@ Framework wykrywa typ zadania na podstawie kształtu i wartości `y`:
 
 ---
 
+## Presety MLP
+
+Gotowe architektury sieci z rozsądnymi wartościami dropout i batch norm.
+
+### Użycie presetu
+
+```python
+from softnet import SoftClassifier
+from softnet.presets import list_presets
+
+# podejrzyj dostępne presety
+list_presets()
+# tiny         [64, 32]                     dropout=0.0  bn=False
+# small        [128, 64, 32]                dropout=0.1  bn=False
+# small_bn     [128, 64, 32]                dropout=0.2  bn=True
+# medium       [256, 128, 64, 32]           dropout=0.2  bn=False
+# medium_bn    [256, 128, 64, 32]           dropout=0.3  bn=True
+# large        [512, 256, 128, 64, 32]      dropout=0.3  bn=False
+# large_bn     [512, 256, 128, 64, 32]      dropout=0.3  bn=True
+# deep         [512, 256, 256, 128, 64, 32] dropout=0.3  bn=True
+# deep_wide    [1024, 512, 256, 128, 64, 32] dropout=0.4 bn=True
+# wide         [1024, 512, 256]             dropout=0.4  bn=True
+# residual_like [256, 256, 256, 256]        dropout=0.2  bn=True
+
+# utwórz klasyfikator z presetu
+clf = SoftClassifier.from_preset("medium")
+clf.fit(X_train, y_train)
+
+# nadpisz dowolny parametr
+clf = SoftClassifier.from_preset("deep", epochs=200, batch_size=64, verbose=1)
+```
+
+### Własny preset w TOML
+
+Utwórz plik `my_presets.toml` i dodaj własne architektury:
+
+```toml
+[fraud_net]
+layers      = [512, 256, 128, 64]
+dropout     = 0.4
+batch_norm  = true
+description = "Specjalizowana sieć do wykrywania fraudów."
+
+[quick_test]
+layers      = [32, 16]
+dropout     = 0.0
+batch_norm  = false
+description = "Minimalna sieć do szybkich testów."
+```
+
+Wczytaj i użyj:
+
+```python
+from softnet.presets import load_presets_from_toml, list_presets
+
+load_presets_from_toml("my_presets.toml")
+
+list_presets()  # fraud_net i quick_test są teraz dostępne
+
+clf = SoftClassifier.from_preset("fraud_net", epochs=100)
+clf.fit(X_train, y_train)
+```
+
+### Modyfikacja wbudowanych presetów
+
+Wbudowane presety znajdziesz w pliku `softnet/presets.toml` w repozytorium.
+Możesz je edytować bezpośrednio — zmiany są widoczne po ponownym imporcie modułu.
+
+```toml
+# softnet/presets.toml  ← edytuj ten plik aby zmienić wbudowane presety
+
+[medium]
+layers      = [512, 256, 128, 64]   # zmieniono z [256, 128, 64, 32]
+dropout     = 0.25
+batch_norm  = false
+description = "Mój zmodyfikowany medium."
+```
+
+---
+
 ## Dostępne modele bazowe (BackboneRegistry)
 
 Wszystkie modele pretrenowane na ImageNet, ładowane leniwie (brak narzutu przy imporcie).
