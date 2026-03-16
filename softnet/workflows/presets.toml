@@ -1,0 +1,79 @@
+# soft-net — workflow presets
+#
+# Każdy preset definiuje sekwencję kroków ML i ich domyślne parametry.
+# Dostępne kroki: split, scale, fit, validate, save, grid_search,
+#                 randomized_search, voting
+#
+# Edytuj ten plik aby zmienić domyślne presety.
+# Własne presety ładuj przez: load_workflows_from_toml("my_workflows.toml")
+
+# ── podstawowe ────────────────────────────────────────────────────────────────
+
+[basic]
+description = "Minimalny cykl: split → fit → validate"
+steps       = ["split", "fit", "validate"]
+
+[scaled]
+description = "Standardowy z normalizacją: split → scale → fit → validate"
+steps       = ["split", "scale", "fit", "validate"]
+
+[scaled_save]
+description = "Z zapisem modelu: split → scale → fit → validate → save"
+steps       = ["split", "scale", "fit", "validate", "save"]
+
+# ── przeszukiwanie hiperparametrów ────────────────────────────────────────────
+
+[grid_search]
+description = "GridSearchCV: split → scale → grid_search → validate"
+steps       = ["split", "scale", "grid_search", "validate"]
+
+[randomized_search]
+description = "RandomizedSearchCV (szybsze): split → scale → randomized_search → validate"
+steps       = ["split", "scale", "randomized_search", "validate"]
+
+# ── ansamble ──────────────────────────────────────────────────────────────────
+
+[voting]
+description = "Voting ensemble: split → scale → voting → validate"
+steps       = ["split", "scale", "voting", "validate"]
+
+# ── pełne ────────────────────────────────────────────────────────────────────
+
+[full]
+description = "Pełny cykl: split → scale → fit → validate → save"
+steps       = ["split", "scale", "fit", "validate", "save"]
+
+[full_search]
+description = "Pełny z grid search: split → scale → grid_search → validate → save"
+steps       = ["split", "scale", "grid_search", "validate", "save"]
+
+# ── domyślne parametry kroków ─────────────────────────────────────────────────
+
+[step_defaults.split]
+test_size    = 0.2
+stratify     = true
+random_state = 42
+
+[step_defaults.scale]
+method = "standard"   # "standard" | "minmax" | "robust"
+
+[step_defaults.validate]
+# metryki dobierane automatycznie na podstawie typu zadania
+
+[step_defaults.save]
+path   = "model"
+format = "keras"      # "keras" | "joblib"
+
+[step_defaults.grid_search]
+cv      = 5
+n_jobs  = -1
+verbose = 0
+
+[step_defaults.randomized_search]
+cv           = 5
+n_iter       = 20
+n_jobs       = -1
+random_state = 42
+
+[step_defaults.voting]
+voting = "soft"       # "soft" | "hard"

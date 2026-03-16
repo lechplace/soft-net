@@ -21,6 +21,15 @@ from softnet.presets import (
     register_preset,
     load_presets_from_toml,
 )
+from softnet.workflows import (
+    SoftWorkflow,
+    WorkflowResult,
+    WorkflowPreset,
+    list_workflows,
+    get_workflow,
+    register_workflow,
+    load_workflows_from_toml,
+)
 
 __version__ = "0.1.0"
 
@@ -31,10 +40,18 @@ __all__ = [
     "BackboneRegistry",
     "TaskInferrer",
     "TaskType",
-    # presets
+    # MLP presets
     "MLPPreset",
     "list_presets",
     "get_preset",
     "register_preset",
     "load_presets_from_toml",
+    # workflow presets
+    "SoftWorkflow",
+    "WorkflowResult",
+    "WorkflowPreset",
+    "list_workflows",
+    "get_workflow",
+    "register_workflow",
+    "load_workflows_from_toml",
 ]
