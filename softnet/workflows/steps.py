@@ -165,7 +165,7 @@ class ValidateStep:
         task = TaskInferrer().infer(ctx["y_train"])
         results: dict[str, Any] = {}
 
-        if task.task_type == TaskType.REGRESSION:
+        if task.task == TaskType.REGRESSION:
             results["r2"]   = r2_score(y_test, y_pred)
             results["mae"]  = mean_absolute_error(y_test, y_pred)
             results["rmse"] = float(np.sqrt(mean_squared_error(y_test, y_pred)))
@@ -177,13 +177,13 @@ class ValidateStep:
             )
         else:
             results["accuracy"] = accuracy_score(y_test, y_pred)
-            avg = "binary" if task.task_type == TaskType.BINARY else "macro"
+            avg = "binary" if task.task == TaskType.BINARY else "macro"
             results["f1"] = f1_score(y_test, y_pred, average=avg, zero_division=0)
             results["classification_report"] = classification_report(y_test, y_pred)
             results["score"] = results["accuracy"]
             results["report"] = results["classification_report"]
 
-            if task.task_type == TaskType.BINARY and hasattr(estimator, "predict_proba"):
+            if task.task == TaskType.BINARY and hasattr(estimator, "predict_proba"):
                 try:
                     proba = estimator.predict_proba(X_test)[:, 1]
                     results["roc_auc"] = roc_auc_score(y_test, proba)
@@ -434,8 +434,9 @@ class VotingStep:
 
     def _default_estimators(self, task_type):
         from softnet.tabular import SoftClassifier, SoftRegressor
+        from softnet.inference import TaskType
 
-        if str(task_type).startswith("TaskType.REGRESSION") or "regression" in str(task_type).lower():
+        if task_type == TaskType.REGRESSION or task_type == TaskType.MULTIOUTPUT_REGRESSION:
             EstCls = SoftRegressor
         else:
             EstCls = SoftClassifier
@@ -450,9 +451,9 @@ class VotingStep:
         from softnet.inference import TaskInferrer, TaskType
 
         task = TaskInferrer().infer(ctx["y_train"])
-        estimators = self.estimators or self._default_estimators(task.task_type)
+        estimators = self.estimators or self._default_estimators(task.task)
 
-        if task.task_type == TaskType.REGRESSION:
+        if task.task == TaskType.REGRESSION:
             from sklearn.ensemble import VotingRegressor
             ensemble = VotingRegressor(estimators=estimators)
         else:
@@ -680,7 +681,7 @@ class FeatureSelectionStep:
     def _default_estimator(self, y):
         from softnet.inference import TaskInferrer, TaskType
         task = TaskInferrer().infer(y)
-        if task.task_type == TaskType.REGRESSION:
+        if task.task == TaskType.REGRESSION:
             from sklearn.ensemble import RandomForestRegressor
             return RandomForestRegressor(
                 n_estimators=self.n_estimators,
@@ -867,7 +868,7 @@ class LeafEncodingStep:
             random_state=self.random_state,
             n_jobs=-1,
         )
-        if task.task_type == TaskType.REGRESSION:
+        if task.task == TaskType.REGRESSION:
             from sklearn.ensemble import RandomForestRegressor
             return RandomForestRegressor(**common)
         else:
