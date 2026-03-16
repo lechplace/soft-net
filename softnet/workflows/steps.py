@@ -575,12 +575,182 @@ class PCAStep:
         return ctx
 
 
+# ── FeatureSelectionStep ──────────────────────────────────────────────────────
+
+class FeatureSelectionStep:
+    """
+    Selekcja cech na podstawie feature importance z modelu drzewiastego.
+
+    Uruchamia RandomForest (lub inny model z ``feature_importances_``) na danych
+    treningowych, a następnie wybiera najważniejsze cechy i przekazuje je
+    do kolejnych kroków (np. ``FitStep``).
+
+    Fitowany wyłącznie na ``X_train`` — brak data leakage.
+
+    Parameters
+    ----------
+    selector_estimator : sklearn estimator, optional
+        Model używany do obliczenia ważności cech.
+        Musi posiadać atrybut ``feature_importances_`` po fitowaniu.
+        Domyślnie: ``RandomForestClassifier(n_estimators=100, random_state=42)``
+        dla klasyfikacji lub ``RandomForestRegressor`` dla regresji.
+        Wykrywanie automatyczne na podstawie ``y_train``.
+    threshold : str or float, default "mean"
+        Próg ważności cechy:
+
+        - ``"mean"``   — cechy powyżej średniej ważności (domyślne)
+        - ``"median"`` — cechy powyżej mediany ważności
+        - ``float``    — np. ``0.01`` — cechy z ważnością > 1%
+    max_features : int or None, default None
+        Maksymalna liczba wybieranych cech.
+        Jeśli podane, wybierane są top-N według ważności
+        (zamiast progu ``threshold``).
+    n_estimators : int, default 100
+        Liczba drzew w domyślnym RandomForest (ignorowane gdy podano
+        własny ``selector_estimator``).
+    random_state : int, default 42
+        Seed dla domyślnego RandomForest.
+
+    Attributes set in ctx
+    ---------------------
+    ctx["feature_selector"] : SelectFromModel
+        Fitowany selektor — można go użyć do transformacji nowych danych.
+    ctx["feature_importances"] : ndarray of shape (n_features,)
+        Wektor ważności cech z modelu selekcyjnego (przed filtrowaniem).
+    ctx["selected_features"] : list of int
+        Indeksy wybranych cech w oryginalnej macierzy X.
+    ctx["n_features_original"] : int
+        Liczba cech przed selekcją.
+    ctx["n_features_selected"] : int
+        Liczba cech po selekcji.
+
+    Notes
+    -----
+    Zalecana kolejność kroków:
+
+    ``split → scale → feature_selection → fit → validate``
+
+    lub z PCA po selekcji (rzadziej potrzebne, ale możliwe):
+
+    ``split → scale → feature_selection → pca → fit → validate``
+
+    Examples
+    --------
+    Domyślnie — RandomForest, próg = mean:
+
+    >>> step = FeatureSelectionStep()
+
+    Top 20 najważniejszych cech:
+
+    >>> step = FeatureSelectionStep(max_features=20)
+
+    Własny próg:
+
+    >>> step = FeatureSelectionStep(threshold=0.01)
+
+    Własny model selekcji (np. GradientBoosting):
+
+    >>> from sklearn.ensemble import GradientBoostingClassifier
+    >>> step = FeatureSelectionStep(
+    ...     selector_estimator=GradientBoostingClassifier(n_estimators=50),
+    ... )
+
+    Przez preset:
+
+    >>> wf = SoftWorkflow.from_preset("rf_select")
+    >>> result = wf.run(X, y, estimator=SoftClassifier.from_preset("medium"))
+    >>> print(result.ctx["selected_features"])   # indeksy wybranych cech
+    >>> print(result.ctx["feature_importances"]) # ważność wszystkich cech
+    """
+
+    def __init__(
+        self,
+        selector_estimator=None,
+        threshold: str | float = "mean",
+        max_features: int | None = None,
+        n_estimators: int = 100,
+        random_state: int = 42,
+    ):
+        self.selector_estimator = selector_estimator
+        self.threshold = threshold
+        self.max_features = max_features
+        self.n_estimators = n_estimators
+        self.random_state = random_state
+
+    def _default_estimator(self, y):
+        from softnet.inference import TaskInferrer, TaskType
+        task = TaskInferrer().infer(y)
+        if task.task_type == TaskType.REGRESSION:
+            from sklearn.ensemble import RandomForestRegressor
+            return RandomForestRegressor(
+                n_estimators=self.n_estimators,
+                random_state=self.random_state,
+                n_jobs=-1,
+            )
+        else:
+            from sklearn.ensemble import RandomForestClassifier
+            return RandomForestClassifier(
+                n_estimators=self.n_estimators,
+                random_state=self.random_state,
+                n_jobs=-1,
+            )
+
+    def run(self, ctx: Context) -> Context:
+        import numpy as np
+        from sklearn.feature_selection import SelectFromModel
+
+        if "X_train" not in ctx:
+            raise ValueError(
+                "FeatureSelectionStep wymaga wcześniejszego SplitStep. "
+                "Upewnij się, że 'split' jest przed 'feature_selection'."
+            )
+
+        X_train, y_train = ctx["X_train"], ctx["y_train"]
+        n_original = X_train.shape[1]
+
+        estimator = self.selector_estimator or self._default_estimator(y_train)
+
+        # SelectFromModel: fit na train, transform na train i test
+        if self.max_features is not None:
+            # tryb top-N: próg = (n+1)-ta najwyższa ważność
+            estimator.fit(X_train, y_train)
+            importances = estimator.feature_importances_
+            sorted_idx = np.argsort(importances)[::-1]
+            cutoff = importances[sorted_idx[min(self.max_features, n_original) - 1]]
+            selector = SelectFromModel(estimator, threshold=cutoff, prefit=True)
+        else:
+            selector = SelectFromModel(estimator, threshold=self.threshold)
+            selector.fit(X_train, y_train)
+            importances = selector.estimator_.feature_importances_
+
+        X_train_new = selector.transform(X_train)
+        X_test_new  = selector.transform(ctx["X_test"])
+        selected    = list(selector.get_support(indices=True))
+
+        ctx["X_train"] = X_train_new
+        ctx["X_test"]  = X_test_new
+        ctx["feature_selector"]    = selector
+        ctx["feature_importances"] = importances
+        ctx["selected_features"]   = selected
+        ctx["n_features_original"] = n_original
+        ctx["n_features_selected"] = X_train_new.shape[1]
+
+        est_name = type(selector.estimator_).__name__
+        print(
+            f"[soft-net] FeatureSelection ({est_name}): "
+            f"{n_original} → {X_train_new.shape[1]} cech  "
+            f"(próg={self.threshold if self.max_features is None else f'top-{self.max_features}'})"
+        )
+        return ctx
+
+
 # ── rejestr kroków ────────────────────────────────────────────────────────────
 
 STEP_REGISTRY: dict[str, type] = {
     "split":             SplitStep,
     "scale":             ScaleStep,
     "pca":               PCAStep,
+    "feature_selection": FeatureSelectionStep,
     "fit":               FitStep,
     "validate":          ValidateStep,
     "save":              SaveStep,

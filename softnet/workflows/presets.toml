@@ -21,6 +21,24 @@ steps       = ["split", "scale", "fit", "validate"]
 description = "Z zapisem modelu: split → scale → fit → validate → save"
 steps       = ["split", "scale", "fit", "validate", "save"]
 
+# ── z selekcją cech (RandomForest → soft-net) ────────────────────────────────
+
+[rf_select]
+description = "RF selekcja cech → sieć: split → scale → feature_selection → fit → validate"
+steps       = ["split", "scale", "feature_selection", "fit", "validate"]
+
+[rf_select_save]
+description = "RF selekcja + zapis: split → scale → feature_selection → fit → validate → save"
+steps       = ["split", "scale", "feature_selection", "fit", "validate", "save"]
+
+[rf_select_pca]
+description = "RF selekcja → PCA → sieć: split → scale → feature_selection → pca → fit → validate"
+steps       = ["split", "scale", "feature_selection", "pca", "fit", "validate"]
+
+[rf_select_search]
+description = "RF selekcja + grid search: split → scale → feature_selection → grid_search → validate"
+steps       = ["split", "scale", "feature_selection", "grid_search", "validate"]
+
 # ── z PCA ────────────────────────────────────────────────────────────────────
 
 [scaled_pca]
@@ -70,6 +88,12 @@ random_state = 42
 
 [step_defaults.scale]
 method = "standard"   # "standard" | "minmax" | "robust"
+
+[step_defaults.feature_selection]
+threshold    = "mean"   # "mean" | "median" | float (np. 0.01)
+n_estimators = 100
+random_state = 42
+# max_features = 20   # odkomentuj aby wybrać top-N zamiast progu
 
 [step_defaults.pca]
 n_components = 0.95   # zachowaj 95% wariancji; int = dokładna liczba, float = % wariancji
