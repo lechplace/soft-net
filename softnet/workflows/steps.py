@@ -744,6 +744,206 @@ class FeatureSelectionStep:
         return ctx
 
 
+# ── LeafEncodingStep ──────────────────────────────────────────────────────────
+
+class LeafEncodingStep:
+    """
+    Tree Embedding: ID liści RandomForest jako nowe cechy dla sieci neuronowej.
+
+    Technika spopularyzowana przez Facebook (Practical Lessons from Predicting
+    Clicks on Ads at Facebook, 2014). RandomForest robi dwie rzeczy jednocześnie:
+
+    1. **Embedding** — każda próbka jest przepuszczana przez wszystkie drzewa,
+       ID liścia w którym wyląduje staje się cechą binarną (one-hot).
+       Wynik: macierz (n_samples, suma_liści_wszystkich_drzew).
+
+    2. **Selekcja** — opcjonalnie dołącza oryginalne cechy o wysokiej ważności
+       obok embeddingów.
+
+    Schemat przepływu danych::
+
+        X_train  ──► RF.fit(X_train, y_train)
+                         │
+                         ├─► RF.apply(X_train)  → liście (n, n_trees)
+                         │        └─► OneHotEncode → embedding (n, Σliście)
+                         │
+                         └─► feature_importances_ → top-K oryginalne cechy
+                                                         │
+                         embedding ──── concat ──────────┘
+                                          │
+                                     X_train_new  ──► FitStep (soft-net)
+
+    Parameters
+    ----------
+    n_estimators : int, default 100
+        Liczba drzew w RandomForest.
+    max_leaf_nodes : int or None, default 32
+        Maksymalna liczba liści na drzewo. Ogranicza wymiarowość embeddingu.
+        ``None`` — bez ograniczeń (może dać bardzo dużo cech).
+    include_original : bool, default True
+        Czy dołączyć oryginalne cechy obok embeddingów z liści.
+        Jeśli ``True``, łączy top-``max_original_features`` cech z embeddingiem.
+    max_original_features : int or None, default None
+        Liczba oryginalnych cech do dołączenia (sortowane według ważności RF).
+        ``None`` — wszystkie oryginalne cechy gdy ``include_original=True``.
+    importance_threshold : float or None, default None
+        Alternatywa dla ``max_original_features`` — dołącz cechy z ważnością
+        powyżej progu. Ignorowane gdy ``max_original_features`` jest podane.
+    random_state : int, default 42
+        Seed RandomForest.
+
+    Attributes set in ctx
+    ---------------------
+    ctx["leaf_encoder"] : RandomForestClassifier / RandomForestRegressor
+        Fitowany RF używany do embeddingu.
+    ctx["leaf_ohe"] : OneHotEncoder
+        Fitowany enkoder one-hot liści (do transformacji nowych danych).
+    ctx["leaf_feature_importances"] : ndarray
+        Ważności cech z RF przed selekcją.
+    ctx["leaf_selected_original"] : list of int or None
+        Indeksy oryginalnych cech dołączonych do embeddingu.
+    ctx["n_leaf_features"] : int
+        Liczba cech z embeddingu liści.
+    ctx["n_total_features"] : int
+        Łączna liczba cech po połączeniu embeddingu z oryginalnymi.
+
+    Notes
+    -----
+    Zalecana kolejność kroków:
+
+    ``split → scale → leaf_encoding → fit → validate``
+
+    Skalowanie przed embeddingiem nie jest konieczne (RF jest odporny na skalę),
+    ale pomaga sieci neuronowej w dalszym kroku.
+
+    Examples
+    --------
+    Domyślnie — 100 drzew, 32 liście, dołącz wszystkie oryginalne cechy:
+
+    >>> step = LeafEncodingStep()
+
+    Tylko embeddingi z liści, bez oryginalnych cech:
+
+    >>> step = LeafEncodingStep(include_original=False)
+
+    Top-10 oryginalnych cech + embeddingi:
+
+    >>> step = LeafEncodingStep(max_original_features=10)
+
+    Oryginalne cechy o ważności > 1% + embeddingi:
+
+    >>> step = LeafEncodingStep(importance_threshold=0.01)
+
+    Przez preset:
+
+    >>> wf = SoftWorkflow.from_preset("leaf_embed")
+    >>> result = wf.run(X, y, estimator=SoftClassifier.from_preset("medium"))
+    >>> print(result.ctx["n_leaf_features"])    # ile cech z embeddingu
+    >>> print(result.ctx["n_total_features"])   # łącznie po połączeniu
+    """
+
+    def __init__(
+        self,
+        n_estimators: int = 100,
+        max_leaf_nodes: int | None = 32,
+        include_original: bool = True,
+        max_original_features: int | None = None,
+        importance_threshold: float | None = None,
+        random_state: int = 42,
+    ):
+        self.n_estimators = n_estimators
+        self.max_leaf_nodes = max_leaf_nodes
+        self.include_original = include_original
+        self.max_original_features = max_original_features
+        self.importance_threshold = importance_threshold
+        self.random_state = random_state
+
+    def _make_rf(self, y):
+        from softnet.inference import TaskInferrer, TaskType
+        task = TaskInferrer().infer(y)
+        common = dict(
+            n_estimators=self.n_estimators,
+            max_leaf_nodes=self.max_leaf_nodes,
+            random_state=self.random_state,
+            n_jobs=-1,
+        )
+        if task.task_type == TaskType.REGRESSION:
+            from sklearn.ensemble import RandomForestRegressor
+            return RandomForestRegressor(**common)
+        else:
+            from sklearn.ensemble import RandomForestClassifier
+            return RandomForestClassifier(**common)
+
+    def _select_original_indices(self, importances) -> list[int] | None:
+        import numpy as np
+        if not self.include_original:
+            return None
+        if self.max_original_features is not None:
+            idx = np.argsort(importances)[::-1][:self.max_original_features]
+            return sorted(idx.tolist())
+        if self.importance_threshold is not None:
+            return [i for i, v in enumerate(importances) if v >= self.importance_threshold]
+        # wszystkie oryginalne
+        return list(range(len(importances)))
+
+    def run(self, ctx: Context) -> Context:
+        import numpy as np
+        from sklearn.preprocessing import OneHotEncoder
+
+        if "X_train" not in ctx:
+            raise ValueError(
+                "LeafEncodingStep wymaga wcześniejszego SplitStep. "
+                "Upewnij się, że 'split' jest przed 'leaf_encoding'."
+            )
+
+        X_train, X_test = ctx["X_train"], ctx["X_test"]
+        y_train = ctx["y_train"]
+
+        # 1. fit RandomForest
+        rf = self._make_rf(y_train)
+        rf.fit(X_train, y_train)
+        importances = rf.feature_importances_
+
+        # 2. leaf IDs: shape (n_samples, n_estimators)
+        leaves_train = rf.apply(X_train)   # int32 leaf node IDs
+        leaves_test  = rf.apply(X_test)
+
+        # 3. one-hot encode liści — każde drzewo × każdy liść = 1 bit
+        ohe = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
+        ohe.fit(leaves_train)
+        embed_train = ohe.transform(leaves_train)
+        embed_test  = ohe.transform(leaves_test)
+
+        # 4. selekcja oryginalnych cech do dołączenia
+        orig_idx = self._select_original_indices(importances)
+
+        if orig_idx is not None:
+            X_train_new = np.hstack([embed_train, X_train[:, orig_idx]])
+            X_test_new  = np.hstack([embed_test,  X_test[:, orig_idx]])
+        else:
+            X_train_new = embed_train
+            X_test_new  = embed_test
+
+        ctx["X_train"] = X_train_new
+        ctx["X_test"]  = X_test_new
+        ctx["leaf_encoder"]              = rf
+        ctx["leaf_ohe"]                  = ohe
+        ctx["leaf_feature_importances"]  = importances
+        ctx["leaf_selected_original"]    = orig_idx
+        ctx["n_leaf_features"]           = embed_train.shape[1]
+        ctx["n_total_features"]          = X_train_new.shape[1]
+
+        orig_info = (
+            f" + {len(orig_idx)} oryginalnych cech" if orig_idx is not None else ""
+        )
+        print(
+            f"[soft-net] LeafEncoding: {X_train.shape[1]} cech  "
+            f"→  {embed_train.shape[1]} leaf features{orig_info}  "
+            f"=  {X_train_new.shape[1]} łącznie"
+        )
+        return ctx
+
+
 # ── rejestr kroków ────────────────────────────────────────────────────────────
 
 STEP_REGISTRY: dict[str, type] = {
@@ -751,6 +951,7 @@ STEP_REGISTRY: dict[str, type] = {
     "scale":             ScaleStep,
     "pca":               PCAStep,
     "feature_selection": FeatureSelectionStep,
+    "leaf_encoding":     LeafEncodingStep,
     "fit":               FitStep,
     "validate":          ValidateStep,
     "save":              SaveStep,

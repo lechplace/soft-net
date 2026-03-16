@@ -21,6 +21,24 @@ steps       = ["split", "scale", "fit", "validate"]
 description = "Z zapisem modelu: split → scale → fit → validate → save"
 steps       = ["split", "scale", "fit", "validate", "save"]
 
+# ── tree embedding (leaf encoding) ───────────────────────────────────────────
+
+[leaf_embed]
+description = "RF leaf encoding + oryginalne cechy → sieć: split → scale → leaf_encoding → fit → validate"
+steps       = ["split", "scale", "leaf_encoding", "fit", "validate"]
+
+[leaf_embed_only]
+description = "Tylko embeddingi z liści (bez oryginalnych cech): split → scale → leaf_encoding → fit → validate"
+steps       = ["split", "scale", "leaf_encoding", "fit", "validate"]
+
+[leaf_embed_save]
+description = "RF leaf encoding + zapis: split → scale → leaf_encoding → fit → validate → save"
+steps       = ["split", "scale", "leaf_encoding", "fit", "validate", "save"]
+
+[leaf_embed_search]
+description = "Leaf encoding + grid search: split → scale → leaf_encoding → grid_search → validate"
+steps       = ["split", "scale", "leaf_encoding", "grid_search", "validate"]
+
 # ── z selekcją cech (RandomForest → soft-net) ────────────────────────────────
 
 [rf_select]
@@ -88,6 +106,14 @@ random_state = 42
 
 [step_defaults.scale]
 method = "standard"   # "standard" | "minmax" | "robust"
+
+[step_defaults.leaf_encoding]
+n_estimators          = 100
+max_leaf_nodes        = 32      # maks. liści na drzewo; None = bez ograniczeń
+include_original      = true    # dołącz oryginalne cechy obok embeddingów
+# max_original_features = 20   # odkomentuj aby ograniczyć do top-N oryginalnych cech
+# importance_threshold  = 0.01 # alternatywa: cechy z ważnością > X%
+random_state          = 42
 
 [step_defaults.feature_selection]
 threshold    = "mean"   # "mean" | "median" | float (np. 0.01)
