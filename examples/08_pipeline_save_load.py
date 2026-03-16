@@ -11,8 +11,7 @@ Dataset: UCI Credit Card Fraud (Kaggle: mlg-ulb/creditcardfraud)
          284 807 transakcji, 492 fraud (0.17%), 30 cech PCA (V1–V28, Amount, Time)
 
 Wymagania:
-    pip install kaggle
-    # Umieść ~/.kaggle/kaggle.json z tokenem API (https://kaggle.com/settings → API)
+    pip install kagglehub   # token nie jest wymagany
 
 Uruchomienie:
     python examples/08_pipeline_save_load.py
@@ -21,7 +20,6 @@ Uruchomienie:
 # ── 0. importy ────────────────────────────────────────────────────────────────
 
 import os
-import zipfile
 import warnings
 import numpy as np
 import pandas as pd
@@ -34,8 +32,6 @@ from softnet import SoftClassifier, SoftPipeline
 from softnet.workflows import SoftWorkflow
 
 DATASET_SLUG = "mlg-ulb/creditcardfraud"
-CACHE_DIR    = Path.home() / ".cache" / "soft-net-datasets"
-CSV_PATH     = CACHE_DIR / "creditcard.csv"
 MODEL_DIR    = Path("/tmp/soft-net-fraud-v1")
 MODEL_ZIP    = Path("/tmp/soft-net-fraud-v1.softpipe")
 
@@ -45,39 +41,16 @@ print("=" * 60)
 
 # ── 1. Pobieranie danych z Kaggle ─────────────────────────────────────────────
 
-def download_from_kaggle(slug: str, dest: Path) -> None:
-    """Pobierz dataset z Kaggle API i wypakuj CSV."""
-    try:
-        from kaggle.api.kaggle_api_extended import KaggleApiExtended
-    except ImportError:
-        raise ImportError(
-            "Wymagana biblioteka: pip install kaggle\n"
-            "Oraz token API w ~/.kaggle/kaggle.json\n"
-            "Pobierz go z: https://kaggle.com/settings → API → Create New Token"
-        )
-
-    dest.mkdir(parents=True, exist_ok=True)
-    zip_path = dest / "creditcardfraud.zip"
-
-    print(f"      Pobieranie {slug} …")
-    api = KaggleApiExtended()
-    api.authenticate()
-    api.dataset_download_files(slug, path=str(dest), quiet=False)
-
-    print(f"      Rozpakowywanie …")
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(dest)
-    zip_path.unlink(missing_ok=True)
-
-
 print(f"\n[1/5] Dataset: Credit Card Fraud ({DATASET_SLUG})")
 
-if CSV_PATH.exists():
-    print(f"      Używam z cache: {CSV_PATH}")
-else:
-    print(f"      Brak cache — pobieram z Kaggle …")
-    download_from_kaggle(DATASET_SLUG, CACHE_DIR)
-    print(f"      Zapisano → {CSV_PATH}")
+try:
+    import kagglehub
+except ImportError:
+    raise ImportError("Wymagana biblioteka: pip install kagglehub")
+
+path = kagglehub.dataset_download(DATASET_SLUG)
+CSV_PATH = next(Path(path).glob("*.csv"))
+print(f"      Dane: {CSV_PATH}")
 
 df = pd.read_csv(CSV_PATH)
 X  = df.drop(columns=["Class"]).values.astype(np.float32)
